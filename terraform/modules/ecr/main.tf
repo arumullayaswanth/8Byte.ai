@@ -1,6 +1,8 @@
 resource "aws_ecr_repository" "this" {
   name                 = var.name
   image_tag_mutability = var.image_tag_mutability
+  # allow terraform destroy to remove the repo even if it still has images
+  force_delete = true
 
   image_scanning_configuration {
     scan_on_push = var.scan_on_push
