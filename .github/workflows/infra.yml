@@ -77,15 +77,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # DEBUG: print the exact sub claim GitHub is sending, so we can match it
-      # in the IAM trust policy. Remove this step once OIDC works.
-      - name: Debug OIDC sub claim
-        run: |
-          TOKEN=$(curl -sH "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value')
-          echo "== decoded token claims =="
-          echo "$TOKEN" | cut -d. -f2 | base64 -d 2>/dev/null | jq '{sub, aud, repository, ref, workflow}' || true
-
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_OIDC_ROLE_ARN }}
