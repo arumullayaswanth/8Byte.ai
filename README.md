@@ -96,10 +96,10 @@ Follow these in order. Every step says exactly where to click and what to type.
 
 1. Open your repo on GitHub
 2. Go to **Settings** > **Secrets and variables** > **Actions**
-3. On the **Secrets** tab, click **New repository secret** and add the sensitive ones:
-   - **AWS_OIDC_ROLE_ARN:** the role ARN from Step 4
+3. On the **Secrets** tab, click **New repository secret** and add the sensitive one:
    - **SLACK_WEBHOOK_URL:** a Slack incoming webhook (skip this if you don't use Slack)
-4. On the **Variables** tab, click **New repository variable** and add the non-sensitive ones:
+4. On the **Variables** tab, click **New repository variable** and add the rest:
+   - **AWS_OIDC_ROLE_ARN:** the role ARN from Step 4 (e.g. `arn:aws:iam::<account>:role/8byte-github-deploy`). It's a variable, not a secret, so you can see it and confirm there's no typo.
    - **TF_STATE_BUCKET:** the bucket name from Step 1
    - **TF_LOCK_TABLE:** the DynamoDB table name from Step 2 (`terraform-state-lock`)
    - **ALERT_EMAIL:** your email for alerts
