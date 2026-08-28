@@ -103,6 +103,7 @@ Follow these in order. Every step says exactly where to click and what to type.
    - **TF_STATE_BUCKET:** the bucket name from Step 1
    - **TF_LOCK_TABLE:** the DynamoDB table name from Step 2 (`terraform-state-lock`)
    - **ALERT_EMAIL:** your email for alerts
+   - **SLACK_ENABLED:** set to `true` only if you added a Slack webhook, otherwise leave it unset and the Slack notify step is skipped
 
 ---
 

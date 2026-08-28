@@ -140,14 +140,13 @@ jobs:
   notify-failure:
     runs-on: ubuntu-latest
     needs: [build-and-push, deploy-staging, deploy-production]
-    if: failure()
+    if: failure() && vars.SLACK_ENABLED == 'true'
     steps:
-      - uses: slackapi/slack-github-action@v1.27.0
+      - uses: slackapi/slack-github-action@v2.0.0
         with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
           payload: |
             {
               "text": "CD failed in ${{ github.repository }} for ${{ github.sha }}"
             }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK

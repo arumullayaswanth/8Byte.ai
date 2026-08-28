@@ -92,7 +92,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Trivy image scan
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: app-scan:${{ github.sha }}
           format: table
@@ -112,7 +112,7 @@ jobs:
           working_directory: terraform
 
       - name: Trivy filesystem/config scan
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           scan-type: config
           scan-ref: terraform
@@ -140,14 +140,14 @@ jobs:
   notify-failure:
     runs-on: ubuntu-latest
     needs: [lint-test, dependency-scan, image-scan, iac-scan, codeql]
-    if: failure()
+    # only notify on failure, and only if a webhook is actually configured
+    if: failure() && vars.SLACK_ENABLED == 'true'
     steps:
-      - uses: slackapi/slack-github-action@v1.27.0
+      - uses: slackapi/slack-github-action@v2.0.0
         with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
           payload: |
             {
-              "text": "CI failed on PR #${{ github.event.pull_request.number }} in ${{ github.repository }}"
+              "text": "CI failed in ${{ github.repository }} (run ${{ github.run_id }})"
             }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
