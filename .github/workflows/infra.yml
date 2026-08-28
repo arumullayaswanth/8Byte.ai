@@ -37,27 +37,30 @@ jobs:
       run:
         working-directory: terraform/environments/staging
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - name: Log in to AWS with OIDC
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_OIDC_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - uses: hashicorp/setup-terraform@v3
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.11.4
 
-      - name: Init
+      - name: Terraform init
         run: terraform init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="dynamodb_table=${TF_LOCK_TABLE}"
 
-      - name: Format check
+      - name: Check formatting
         run: terraform fmt -check -recursive ../..
 
-      - name: Validate
+      - name: Validate config
         run: terraform validate
 
-      - name: Plan
+      - name: Show the plan
         run: |
           ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
           IMAGE="$ACCOUNT.dkr.ecr.${AWS_REGION}.amazonaws.com/staging:${BOOTSTRAP_IMAGE_TAG}"
@@ -75,22 +78,26 @@ jobs:
       run:
         working-directory: terraform/environments/staging
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - name: Log in to AWS with OIDC
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_OIDC_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - uses: hashicorp/setup-terraform@v3
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.11.4
+          terraform_wrapper: false
 
-      - name: Init
+      - name: Terraform init
         run: terraform init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="dynamodb_table=${TF_LOCK_TABLE}"
 
       # a merged PR has no input, so default to apply. only destroy when asked.
-      - name: Terraform ${{ github.event.inputs.action || 'apply' }}
+      - name: Terraform ${{ github.event.inputs.action || 'apply' }} staging
         run: |
           ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
           IMAGE="$ACCOUNT.dkr.ecr.${AWS_REGION}.amazonaws.com/staging:${BOOTSTRAP_IMAGE_TAG}"
@@ -104,6 +111,31 @@ jobs:
               -var="alert_email=${{ vars.ALERT_EMAIL }}"
           fi
 
+      - name: Write staging summary
+        if: always()
+        run: |
+          if [ "${{ github.event.inputs.action }}" = "destroy" ]; then
+            {
+              echo "## Staging destroyed"
+              echo ""
+              echo "All staging resources have been removed. Bill for staging = \$0."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "## Staging deployed"
+              echo ""
+              echo "| Resource | Value |"
+              echo "|---|---|"
+              echo "| App URL | http://$(terraform output -raw alb_dns_name 2>/dev/null) |"
+              echo "| ECS cluster | $(terraform output -raw ecs_cluster_name 2>/dev/null) |"
+              echo "| DB endpoint | $(terraform output -raw db_endpoint 2>/dev/null) |"
+              echo "| App dashboard | $(terraform output -raw app_dashboard 2>/dev/null) |"
+              echo "| DB dashboard | $(terraform output -raw db_dashboard 2>/dev/null) |"
+              echo ""
+              echo "Check health at http://$(terraform output -raw alb_dns_name 2>/dev/null)/health"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   production:
     name: ${{ github.event.inputs.action == 'destroy' && 'Destroy' || 'Apply' }} (production)
     needs: staging
@@ -114,21 +146,25 @@ jobs:
       run:
         working-directory: terraform/environments/production
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - name: Log in to AWS with OIDC
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_OIDC_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - uses: hashicorp/setup-terraform@v3
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.11.4
+          terraform_wrapper: false
 
-      - name: Init
+      - name: Terraform init
         run: terraform init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="dynamodb_table=${TF_LOCK_TABLE}"
 
-      - name: Terraform ${{ github.event.inputs.action || 'apply' }}
+      - name: Terraform ${{ github.event.inputs.action || 'apply' }} production
         run: |
           ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
           IMAGE="$ACCOUNT.dkr.ecr.${AWS_REGION}.amazonaws.com/production:${BOOTSTRAP_IMAGE_TAG}"
@@ -140,4 +176,29 @@ jobs:
             terraform apply -auto-approve \
               -var="container_image=$IMAGE" \
               -var="alert_email=${{ vars.ALERT_EMAIL }}"
+          fi
+
+      - name: Write production summary
+        if: always()
+        run: |
+          if [ "${{ github.event.inputs.action }}" = "destroy" ]; then
+            {
+              echo "## Production destroyed"
+              echo ""
+              echo "All production resources have been removed. Bill for production = \$0."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "## Production deployed"
+              echo ""
+              echo "| Resource | Value |"
+              echo "|---|---|"
+              echo "| App URL | http://$(terraform output -raw alb_dns_name 2>/dev/null) |"
+              echo "| ECS cluster | $(terraform output -raw ecs_cluster_name 2>/dev/null) |"
+              echo "| DB endpoint | $(terraform output -raw db_endpoint 2>/dev/null) |"
+              echo "| App dashboard | $(terraform output -raw app_dashboard 2>/dev/null) |"
+              echo "| DB dashboard | $(terraform output -raw db_dashboard 2>/dev/null) |"
+              echo ""
+              echo "Check health at http://$(terraform output -raw alb_dns_name 2>/dev/null)/health"
+            } >> "$GITHUB_STEP_SUMMARY"
           fi

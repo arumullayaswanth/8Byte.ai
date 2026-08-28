@@ -7,6 +7,8 @@ variable "target_group_arn" { type = string }
 variable "app_security_group_id" { type = string }
 
 variable "db_secret_arn" { type = string }
+variable "db_host" { type = string }
+variable "db_name" { type = string }
 
 variable "container_image" { type = string }
 

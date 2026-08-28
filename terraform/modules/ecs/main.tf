@@ -73,17 +73,18 @@ resource "aws_ecs_task_definition" "this" {
         containerPort = var.container_port
         protocol      = "tcp"
       }]
+      # host/port/dbname aren't sensitive so they're plain env vars.
       environment = [
         { name = "PORT", value = tostring(var.container_port) },
-        { name = "NODE_ENV", value = "production" }
+        { name = "NODE_ENV", value = "production" },
+        { name = "DB_HOST", value = var.db_host },
+        { name = "DB_PORT", value = "5432" },
+        { name = "DB_NAME", value = var.db_name }
       ]
-      # pulled from secrets manager at container start, never plaintext here
+      # username + password come from the AWS-managed secret at container start.
       secrets = [
-        { name = "DB_HOST", valueFrom = "${var.db_secret_arn}:host::" },
-        { name = "DB_PORT", valueFrom = "${var.db_secret_arn}:port::" },
         { name = "DB_USER", valueFrom = "${var.db_secret_arn}:username::" },
-        { name = "DB_PASSWORD", valueFrom = "${var.db_secret_arn}:password::" },
-        { name = "DB_NAME", valueFrom = "${var.db_secret_arn}:dbname::" }
+        { name = "DB_PASSWORD", valueFrom = "${var.db_secret_arn}:password::" }
       ]
       logConfiguration = {
         logDriver = "awslogs"

@@ -1,9 +1,7 @@
 variable "name" { type = string }
 variable "vpc_id" { type = string }
 variable "private_data_subnet_ids" { type = list(string) }
-variable "private_app_subnet_ids" { type = list(string) }
 variable "app_security_group_id" { type = string }
-variable "region" { type = string }
 
 variable "db_name" {
   type    = string
@@ -17,7 +15,7 @@ variable "db_username" {
 
 variable "engine_version" {
   type    = string
-  default = "16.4"
+  default = "16"
 }
 
 variable "instance_class" {

@@ -48,9 +48,7 @@ module "rds" {
   name                    = var.name
   vpc_id                  = module.vpc.vpc_id
   private_data_subnet_ids = module.vpc.private_data_subnet_ids
-  private_app_subnet_ids  = module.vpc.private_app_subnet_ids
   app_security_group_id   = aws_security_group.app.id
-  region                  = var.region
   multi_az                = var.db_multi_az
   deletion_protection     = var.db_deletion_protection
   skip_final_snapshot     = var.db_skip_final_snapshot
@@ -65,6 +63,8 @@ module "ecs" {
   alb_listener_arn       = module.alb.listener_arn
   target_group_arn       = module.alb.target_group_arn
   db_secret_arn          = module.rds.db_secret_arn
+  db_host                = module.rds.db_endpoint
+  db_name                = module.rds.db_name
   container_image        = var.container_image
   container_port         = var.container_port
   desired_count          = var.desired_count

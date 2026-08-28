@@ -32,21 +32,23 @@ jobs:
     outputs:
       image: ${{ steps.image.outputs.uri }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - name: Log in to AWS with OIDC
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_OIDC_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - id: ecr
+      - name: Log in to ECR
+        id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Set up Buildx
+      - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # build with layer caching, cache is stored in the ecr repo itself
-      - name: Build and push (with ECR layer cache)
+      - name: Build and push image (with ECR layer cache)
         id: build
         uses: docker/build-push-action@v6
         with:
@@ -56,7 +58,8 @@ jobs:
           cache-from: type=registry,ref=${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:buildcache
           cache-to: type=registry,ref=${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:buildcache,mode=max
 
-      - id: image
+      - name: Save image URI
+        id: image
         run: echo "uri=${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}" >> "$GITHUB_OUTPUT"
 
   deploy-staging:
@@ -65,26 +68,30 @@ jobs:
     needs: build-and-push
     environment: staging
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - name: Log in to AWS with OIDC
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_OIDC_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # grab the current task def, swap the image, register a new revision
-      - run: |
+      - name: Download current task definition
+        run: |
           aws ecs describe-task-definition --task-definition staging \
             --query taskDefinition > task-definition.json
 
-      - id: taskdef
+      - name: Render new task definition
+        id: taskdef
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
           task-definition: task-definition.json
           container-name: staging
           image: ${{ needs.build-and-push.outputs.image }}
 
-      - uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+      - name: Deploy to staging ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
           task-definition: ${{ steps.taskdef.outputs.task-definition }}
           cluster: staging-cluster
@@ -98,18 +105,21 @@ jobs:
     # required reviewer on this environment = manual approval before prod
     environment: production
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - name: Log in to AWS with OIDC
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_OIDC_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - id: ecr
+      - name: Log in to ECR
+        id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # promote the same image that passed staging into the prod repo
-      - id: promote
+      - name: Promote staging image to production repo
+        id: promote
         run: |
           REGISTRY=${{ steps.ecr.outputs.registry }}
           SRC=$REGISTRY/staging:${{ env.IMAGE_TAG }}
@@ -119,18 +129,21 @@ jobs:
           docker push $DST
           echo "uri=$DST" >> "$GITHUB_OUTPUT"
 
-      - run: |
+      - name: Download current task definition
+        run: |
           aws ecs describe-task-definition --task-definition production \
             --query taskDefinition > task-definition.json
 
-      - id: taskdef
+      - name: Render new task definition
+        id: taskdef
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
           task-definition: task-definition.json
           container-name: production
           image: ${{ steps.promote.outputs.uri }}
 
-      - uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+      - name: Deploy to production ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
           task-definition: ${{ steps.taskdef.outputs.task-definition }}
           cluster: production-cluster
@@ -138,11 +151,12 @@ jobs:
           wait-for-service-stability: true
 
   notify:
+    name: Notify Slack
     runs-on: ubuntu-latest
     needs: [build-and-push, deploy-staging, deploy-production]
     if: always() && vars.SLACK_ENABLED == 'true'
     steps:
-      - name: Compute status
+      - name: Compute overall status
         id: status
         run: |
           if [ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" = "true" ]; then
@@ -151,7 +165,8 @@ jobs:
             echo "text=CD PASSED in ${{ github.repository }} for ${{ github.sha }}" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: slackapi/slack-github-action@v2.0.0
+      - name: Send Slack message
+        uses: slackapi/slack-github-action@v2.0.0
         with:
           webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook
