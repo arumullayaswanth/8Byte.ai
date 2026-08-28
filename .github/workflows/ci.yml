@@ -92,7 +92,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Trivy image scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: app-scan:${{ github.sha }}
           format: table
@@ -112,7 +112,7 @@ jobs:
           working_directory: terraform
 
       - name: Trivy filesystem/config scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: config
           scan-ref: terraform
