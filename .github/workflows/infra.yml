@@ -14,7 +14,7 @@ permissions:
 
 env:
   AWS_REGION: ap-south-1
-  TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+  TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
   # placeholder image for the first apply, cd.yml swaps the running task def later
   BOOTSTRAP_IMAGE_TAG: bootstrap
 
@@ -52,7 +52,7 @@ jobs:
         run: |
           ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
           IMAGE="$ACCOUNT.dkr.ecr.${AWS_REGION}.amazonaws.com/staging:${BOOTSTRAP_IMAGE_TAG}"
-          terraform plan -var="container_image=$IMAGE" -var="alert_email=${{ secrets.ALERT_EMAIL }}"
+          terraform plan -var="container_image=$IMAGE" -var="alert_email=${{ vars.ALERT_EMAIL }}"
 
   apply-staging:
     name: Apply (staging)
@@ -86,7 +86,7 @@ jobs:
           IMAGE="$ACCOUNT.dkr.ecr.${AWS_REGION}.amazonaws.com/staging:${BOOTSTRAP_IMAGE_TAG}"
           terraform apply -auto-approve \
             -var="container_image=$IMAGE" \
-            -var="alert_email=${{ secrets.ALERT_EMAIL }}"
+            -var="alert_email=${{ vars.ALERT_EMAIL }}"
 
   apply-production:
     name: Apply (production)
@@ -118,4 +118,4 @@ jobs:
           IMAGE="$ACCOUNT.dkr.ecr.${AWS_REGION}.amazonaws.com/production:${BOOTSTRAP_IMAGE_TAG}"
           terraform apply -auto-approve \
             -var="container_image=$IMAGE" \
-            -var="alert_email=${{ secrets.ALERT_EMAIL }}"
+            -var="alert_email=${{ vars.ALERT_EMAIL }}"

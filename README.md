@@ -92,15 +92,16 @@ Follow these in order. Every step says exactly where to click and what to type.
 
 ---
 
-## Step 5: Add the Secrets in GitHub
+## Step 5: Add the Secrets and Variables in GitHub
 
 1. Open your repo on GitHub
 2. Go to **Settings** > **Secrets and variables** > **Actions**
-3. Click **New repository secret** and add each one:
+3. On the **Secrets** tab, click **New repository secret** and add the sensitive ones:
    - **AWS_DEPLOY_ROLE_ARN:** the role ARN from Step 4
+   - **SLACK_WEBHOOK_URL:** a Slack incoming webhook (skip this if you don't use Slack)
+4. On the **Variables** tab, click **New repository variable** and add the non-sensitive ones:
    - **TF_STATE_BUCKET:** the bucket name from Step 1
    - **ALERT_EMAIL:** your email for alerts
-   - **SLACK_WEBHOOK_URL:** a Slack incoming webhook, or `none`
 
 ---
 
@@ -207,3 +208,45 @@ terraform apply -var="container_image=ECR_IMAGE_URI" -var="alert_email=you@examp
 ```
 
 Production is the same, just from the production folder.
+
+---
+
+## CI checks and code quality
+
+Every pull request runs the CI workflow, which does:
+
+- **Lint** the app with ESLint
+- **Unit + integration tests** against a real Postgres, with coverage
+- **Dependency scan** with npm audit (fails on high/critical)
+- **Container image scan** with Trivy
+- **IaC security scan** of the Terraform with tfsec and Trivy config
+- **CodeQL** code scanning (GitHub native, results show in the Security tab)
+
+Caching:
+- npm dependencies are cached by the setup-node action
+- Docker layers are cached (GitHub Actions cache in CI, and pushed to the ECR
+  repo as a `buildcache` tag in CD) so image builds are faster
+
+### GitHub Security and quality
+
+This uses GitHub's built-in security features, so there's nothing external to
+sign up for:
+
+- **CodeQL** runs on every push and PR (`.github/workflows/codeql.yml`) and
+  reports findings under the repo's Security tab, Code scanning alerts.
+- **Dependabot** (`.github/dependabot.yml`) watches the npm and GitHub Actions
+  dependencies and opens PRs to bump vulnerable versions. Turn on Dependabot
+  alerts under Settings, Code security.
+- **Secret scanning** is enabled from Settings, Code security.
+- A **security policy** lives in `SECURITY.md`.
+
+### Pre-commit hooks (local)
+
+The repo has a `.pre-commit-config.yaml` that runs terraform fmt/validate,
+whitespace fixes, a private-key check, and gitleaks before each commit.
+
+```
+pip install pre-commit
+pre-commit install
+pre-commit run --all-files
+```

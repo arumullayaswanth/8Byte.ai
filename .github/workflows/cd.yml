@@ -42,13 +42,22 @@ jobs:
       - id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # build with layer caching, cache is stored in the ecr repo itself
+      - name: Build and push (with ECR layer cache)
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ./app
+          push: true
+          tags: ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+          cache-from: type=registry,ref=${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:buildcache
+          cache-to: type=registry,ref=${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:buildcache,mode=max
+
       - id: image
-        run: |
-          REGISTRY=${{ steps.ecr.outputs.registry }}
-          URI=$REGISTRY/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
-          docker build -t $URI ./app
-          docker push $URI
-          echo "uri=$URI" >> "$GITHUB_OUTPUT"
+        run: echo "uri=${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}" >> "$GITHUB_OUTPUT"
 
   deploy-staging:
     name: Deploy Staging
