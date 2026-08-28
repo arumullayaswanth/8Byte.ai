@@ -116,9 +116,19 @@ jobs:
           ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
           IMAGE="$ACCOUNT.dkr.ecr.${AWS_REGION}.amazonaws.com/staging:${BOOTSTRAP_IMAGE_TAG}"
           if [ "${{ github.event.inputs.action }}" = "destroy" ]; then
-            terraform destroy -auto-approve \
-              -var="container_image=$IMAGE" \
-              -var="alert_email=${{ vars.ALERT_EMAIL }}"
+            # RDS is slow to terminate, so retry destroy a few times in one run
+            # until everything is gone. each pass removes whatever is left.
+            for i in 1 2 3 4; do
+              echo "== destroy attempt $i =="
+              if terraform destroy -auto-approve \
+                   -var="container_image=$IMAGE" \
+                   -var="alert_email=${{ vars.ALERT_EMAIL }}"; then
+                echo "destroy complete"
+                break
+              fi
+              echo "retrying in 60s..."
+              sleep 60
+            done
           else
             terraform apply -auto-approve \
               -var="container_image=$IMAGE" \
@@ -208,9 +218,17 @@ jobs:
           ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
           IMAGE="$ACCOUNT.dkr.ecr.${AWS_REGION}.amazonaws.com/production:${BOOTSTRAP_IMAGE_TAG}"
           if [ "${{ github.event.inputs.action }}" = "destroy" ]; then
-            terraform destroy -auto-approve \
-              -var="container_image=$IMAGE" \
-              -var="alert_email=${{ vars.ALERT_EMAIL }}"
+            for i in 1 2 3 4; do
+              echo "== destroy attempt $i =="
+              if terraform destroy -auto-approve \
+                   -var="container_image=$IMAGE" \
+                   -var="alert_email=${{ vars.ALERT_EMAIL }}"; then
+                echo "destroy complete"
+                break
+              fi
+              echo "retrying in 60s..."
+              sleep 60
+            done
           else
             terraform apply -auto-approve \
               -var="container_image=$IMAGE" \
