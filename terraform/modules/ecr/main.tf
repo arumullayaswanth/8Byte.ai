@@ -1,13 +1,13 @@
 resource "aws_ecr_repository" "this" {
   name                 = var.name
-  image_tag_mutability = "MUTABLE"
+  image_tag_mutability = var.image_tag_mutability
 
   image_scanning_configuration {
-    scan_on_push = true
+    scan_on_push = var.scan_on_push
   }
 
   encryption_configuration {
-    encryption_type = "AES256"
+    encryption_type = var.encryption_type
   }
 
   tags = { Name = var.name }
@@ -19,20 +19,14 @@ resource "aws_ecr_lifecycle_policy" "this" {
   policy = jsonencode({
     rules = [{
       rulePriority = 1
-      description  = "expire untagged images older than 7 days"
+      description  = "expire untagged images older than ${var.untagged_expiry_days} days"
       selection = {
         tagStatus   = "untagged"
         countType   = "sinceImagePushed"
         countUnit   = "days"
-        countNumber = 7
+        countNumber = var.untagged_expiry_days
       }
       action = { type = "expire" }
     }]
   })
-}
-
-variable "name" { type = string }
-
-output "repository_url" {
-  value = aws_ecr_repository.this.repository_url
 }

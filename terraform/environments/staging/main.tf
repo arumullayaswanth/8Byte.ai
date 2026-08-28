@@ -12,8 +12,6 @@ terraform {
     }
   }
 
-  # bucket and lock table are passed at init time (see backend.hcl). both are
-  # created manually before the pipeline ever runs.
   backend "s3" {
     key     = "staging/terraform.tfstate"
     region  = "ap-south-1"
@@ -25,42 +23,24 @@ provider "aws" {
   region = var.region
   default_tags {
     tags = {
-      Project     = "8byte-devops-assignment"
-      Environment = "staging"
+      Project     = var.project
+      Environment = var.environment
       ManagedBy   = "terraform"
     }
   }
 }
 
-variable "region" {
-  type    = string
-  default = "ap-south-1"
-}
-
-variable "container_image" {
-  type = string
-}
-
-variable "alert_email" {
-  type    = string
-  default = ""
-}
-
 module "stack" {
-  source          = "../../modules/stack"
-  name            = "staging"
-  region          = var.region
-  vpc_cidr        = "10.0.0.0/16"
-  container_image = var.container_image
-  desired_count   = 1
-  db_multi_az     = false
-  alert_email     = var.alert_email
+  source                 = "../../modules/stack"
+  name                   = var.environment
+  region                 = var.region
+  ecr_repo_name          = var.ecr_repo_name
+  vpc_cidr               = var.vpc_cidr
+  container_image        = var.container_image
+  container_port         = var.container_port
+  desired_count          = var.desired_count
+  db_multi_az            = var.db_multi_az
+  db_deletion_protection = var.db_deletion_protection
+  db_skip_final_snapshot = var.db_skip_final_snapshot
+  alert_email            = var.alert_email
 }
-
-output "alb_dns_name" { value = module.stack.alb_dns_name }
-output "ecr_repository_url" { value = module.stack.ecr_repository_url }
-output "ecs_cluster_name" { value = module.stack.ecs_cluster_name }
-output "ecs_service_name" { value = module.stack.ecs_service_name }
-output "db_endpoint" { value = module.stack.db_endpoint }
-output "app_dashboard" { value = module.stack.app_dashboard }
-output "db_dashboard" { value = module.stack.db_dashboard }

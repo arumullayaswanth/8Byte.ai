@@ -1,17 +1,32 @@
-variable "name" { type = string }
-variable "region" { type = string }
+variable "region" {
+  type    = string
+  default = "ap-south-1"
+}
+
+variable "project" {
+  type    = string
+  default = "8byte-devops-assignment"
+}
+
+variable "environment" {
+  type    = string
+  default = "staging"
+}
+
+variable "ecr_repo_name" {
+  type    = string
+  default = "staging"
+}
 
 variable "vpc_cidr" {
   type    = string
   default = "10.0.0.0/16"
 }
 
-variable "ecr_repo_name" {
+variable "container_image" {
   type        = string
-  description = "Name of the ECR repository."
+  description = "ECR image URI:tag to run."
 }
-
-variable "container_image" { type = string }
 
 variable "container_port" {
   type    = number
@@ -20,7 +35,7 @@ variable "container_port" {
 
 variable "desired_count" {
   type    = number
-  default = 2
+  default = 1
 }
 
 variable "db_multi_az" {

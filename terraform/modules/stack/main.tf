@@ -32,7 +32,7 @@ module "vpc" {
 
 module "ecr" {
   source = "../ecr"
-  name   = var.name
+  name   = var.ecr_repo_name
 }
 
 module "alb" {
