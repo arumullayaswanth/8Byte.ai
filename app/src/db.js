@@ -9,6 +9,8 @@ const pool = new Pool({
   max: parseInt(process.env.DB_POOL_MAX || "5", 10),
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
+  // RDS requires SSL. locally (no DB_SSL) we skip it for a plain postgres.
+  ssl: process.env.DB_SSL === "true" ? { rejectUnauthorized: false } : false,
 });
 
 async function initSchema() {

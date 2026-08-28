@@ -125,6 +125,19 @@ jobs:
               -var="alert_email=${{ vars.ALERT_EMAIL }}"
           fi
 
+      # send a deployment email through SNS so there's a mail to show in the demo
+      - name: Send deployment email
+        if: github.event.inputs.action != 'destroy'
+        run: |
+          TOPIC=$(terraform output -raw sns_topic_arn 2>/dev/null || echo "")
+          URL=$(terraform output -raw alb_dns_name 2>/dev/null || echo "")
+          if [ -n "$TOPIC" ]; then
+            aws sns publish --topic-arn "$TOPIC" \
+              --subject "8Byte staging deployed" \
+              --message "Staging deployment finished successfully. App URL: http://$URL  Run: ${{ github.run_id }}" \
+              --region ${AWS_REGION}
+          fi
+
       - name: Write staging summary
         if: always()
         run: |
@@ -202,6 +215,18 @@ jobs:
             terraform apply -auto-approve \
               -var="container_image=$IMAGE" \
               -var="alert_email=${{ vars.ALERT_EMAIL }}"
+          fi
+
+      - name: Send deployment email
+        if: github.event.inputs.action != 'destroy'
+        run: |
+          TOPIC=$(terraform output -raw sns_topic_arn 2>/dev/null || echo "")
+          URL=$(terraform output -raw alb_dns_name 2>/dev/null || echo "")
+          if [ -n "$TOPIC" ]; then
+            aws sns publish --topic-arn "$TOPIC" \
+              --subject "8Byte production deployed" \
+              --message "Production deployment finished successfully. App URL: http://$URL  Run: ${{ github.run_id }}" \
+              --region ${AWS_REGION}
           fi
 
       - name: Write production summary

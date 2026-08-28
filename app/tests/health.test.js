@@ -21,4 +21,10 @@ describe("health & metrics endpoints", () => {
         expect(res.status).toBe(200);
         expect(res.text).toContain("http_requests_total");
     });
+
+    test("GET / returns the homepage", async () => {
+        const res = await request(app).get("/");
+        expect(res.status).toBe(200);
+        expect(res.text).toContain("8Byte Sample App");
+    });
 });

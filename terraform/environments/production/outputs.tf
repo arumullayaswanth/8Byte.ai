@@ -5,3 +5,4 @@ output "ecs_service_name" { value = module.stack.ecs_service_name }
 output "db_endpoint" { value = module.stack.db_endpoint }
 output "app_dashboard" { value = module.stack.app_dashboard }
 output "db_dashboard" { value = module.stack.db_dashboard }
+output "sns_topic_arn" { value = module.stack.sns_topic_arn }

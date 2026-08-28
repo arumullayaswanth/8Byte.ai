@@ -30,6 +30,10 @@ output "db_dashboard" {
   value = module.monitoring.db_dashboard_name
 }
 
+output "sns_topic_arn" {
+  value = module.monitoring.sns_topic_arn
+}
+
 output "log_group_name" {
   value = module.ecs.log_group_name
 }

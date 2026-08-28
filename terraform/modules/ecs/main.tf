@@ -79,7 +79,8 @@ resource "aws_ecs_task_definition" "this" {
         { name = "NODE_ENV", value = "production" },
         { name = "DB_HOST", value = var.db_host },
         { name = "DB_PORT", value = "5432" },
-        { name = "DB_NAME", value = var.db_name }
+        { name = "DB_NAME", value = var.db_name },
+        { name = "DB_SSL", value = "true" }
       ]
       # username + password come from the AWS-managed secret at container start.
       secrets = [
