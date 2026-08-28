@@ -1,0 +1,121 @@
+name: Infra
+
+on:
+  # opened/updated PR -> plan, merged PR -> apply
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    branches: [master]
+  # manual button, use this for a direct push to master
+  workflow_dispatch: {}
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ap-south-1
+  TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+  # placeholder image for the first apply, cd.yml swaps the running task def later
+  BOOTSTRAP_IMAGE_TAG: bootstrap
+
+jobs:
+  plan:
+    name: Plan (staging)
+    # any open PR activity, but not when it's being closed/merged
+    if: github.event_name == 'pull_request' && github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform/environments/staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.11.4
+
+      - name: Init
+        run: terraform init -backend-config="bucket=${TF_STATE_BUCKET}"
+
+      - name: Format check
+        run: terraform fmt -check -recursive ../..
+
+      - name: Validate
+        run: terraform validate
+
+      - name: Plan
+        run: |
+          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+          IMAGE="$ACCOUNT.dkr.ecr.${AWS_REGION}.amazonaws.com/staging:${BOOTSTRAP_IMAGE_TAG}"
+          terraform plan -var="container_image=$IMAGE" -var="alert_email=${{ secrets.ALERT_EMAIL }}"
+
+  apply-staging:
+    name: Apply (staging)
+    # run on a merged PR, or when I click Run manually
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.action == 'closed' && github.event.pull_request.merged == true)
+    runs-on: ubuntu-latest
+    environment: staging
+    defaults:
+      run:
+        working-directory: terraform/environments/staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.11.4
+
+      - name: Init
+        run: terraform init -backend-config="bucket=${TF_STATE_BUCKET}"
+
+      - name: Apply
+        run: |
+          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+          IMAGE="$ACCOUNT.dkr.ecr.${AWS_REGION}.amazonaws.com/staging:${BOOTSTRAP_IMAGE_TAG}"
+          terraform apply -auto-approve \
+            -var="container_image=$IMAGE" \
+            -var="alert_email=${{ secrets.ALERT_EMAIL }}"
+
+  apply-production:
+    name: Apply (production)
+    needs: apply-staging
+    runs-on: ubuntu-latest
+    # required reviewer on this environment is the manual approval gate
+    environment: production
+    defaults:
+      run:
+        working-directory: terraform/environments/production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.11.4
+
+      - name: Init
+        run: terraform init -backend-config="bucket=${TF_STATE_BUCKET}"
+
+      - name: Apply
+        run: |
+          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+          IMAGE="$ACCOUNT.dkr.ecr.${AWS_REGION}.amazonaws.com/production:${BOOTSTRAP_IMAGE_TAG}"
+          terraform apply -auto-approve \
+            -var="container_image=$IMAGE" \
+            -var="alert_email=${{ secrets.ALERT_EMAIL }}"

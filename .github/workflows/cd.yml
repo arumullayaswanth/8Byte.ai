@@ -1,0 +1,144 @@
+name: CD
+
+on:
+  # deploys when a PR is merged into master
+  pull_request:
+    types: [closed]
+    branches: [master]
+  # manual button, use this for a direct push to master
+  workflow_dispatch: {}
+
+concurrency:
+  group: cd-master
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-south-1
+  ECR_REPOSITORY: staging
+  IMAGE_TAG: ${{ github.sha }}
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build-and-push:
+    name: Build & Push
+    # merged PR, or manual run
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.action == 'closed' && github.event.pull_request.merged == true)
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.image.outputs.uri }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - id: image
+        run: |
+          REGISTRY=${{ steps.ecr.outputs.registry }}
+          URI=$REGISTRY/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+          docker build -t $URI ./app
+          docker push $URI
+          echo "uri=$URI" >> "$GITHUB_OUTPUT"
+
+  deploy-staging:
+    name: Deploy Staging
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # grab the current task def, swap the image, register a new revision
+      - run: |
+          aws ecs describe-task-definition --task-definition staging \
+            --query taskDefinition > task-definition.json
+
+      - id: taskdef
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: staging
+          image: ${{ needs.build-and-push.outputs.image }}
+
+      - uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.taskdef.outputs.task-definition }}
+          cluster: staging-cluster
+          service: staging-svc
+          wait-for-service-stability: true
+
+  deploy-production:
+    name: Deploy Production
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    # required reviewer on this environment = manual approval before prod
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # promote the same image that passed staging into the prod repo
+      - id: promote
+        run: |
+          REGISTRY=${{ steps.ecr.outputs.registry }}
+          SRC=$REGISTRY/staging:${{ env.IMAGE_TAG }}
+          DST=$REGISTRY/production:${{ env.IMAGE_TAG }}
+          docker pull $SRC
+          docker tag $SRC $DST
+          docker push $DST
+          echo "uri=$DST" >> "$GITHUB_OUTPUT"
+
+      - run: |
+          aws ecs describe-task-definition --task-definition production \
+            --query taskDefinition > task-definition.json
+
+      - id: taskdef
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: production
+          image: ${{ steps.promote.outputs.uri }}
+
+      - uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.taskdef.outputs.task-definition }}
+          cluster: production-cluster
+          service: production-svc
+          wait-for-service-stability: true
+
+  notify-failure:
+    runs-on: ubuntu-latest
+    needs: [build-and-push, deploy-staging, deploy-production]
+    if: failure()
+    steps:
+      - uses: slackapi/slack-github-action@v1.27.0
+        with:
+          payload: |
+            {
+              "text": "CD failed in ${{ github.repository }} for ${{ github.sha }}"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK

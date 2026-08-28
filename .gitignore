@@ -1,0 +1,24 @@
+# Node
+node_modules/
+npm-debug.log*
+.env
+
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+crash.log
+*.tfvars
+!*.tfvars.example
+.terraform.lock.hcl.bak
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+task-definition.json
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

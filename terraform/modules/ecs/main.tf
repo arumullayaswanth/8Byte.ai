@@ -1,0 +1,148 @@
+data "aws_region" "current" {}
+
+resource "aws_cloudwatch_log_group" "app" {
+  name              = "/ecs/${var.name}"
+  retention_in_days = var.log_retention_days
+  tags              = { Name = "${var.name}-logs" }
+}
+
+# app SG comes from the root module so rds can reference it without a cycle
+
+data "aws_iam_policy_document" "assume" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["ecs-tasks.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "execution" {
+  name               = "${var.name}-ecs-execution"
+  assume_role_policy = data.aws_iam_policy_document.assume.json
+}
+
+resource "aws_iam_role_policy_attachment" "execution_managed" {
+  role       = aws_iam_role.execution.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
+# lets the execution role pull the db secret to inject as env
+resource "aws_iam_role_policy" "secrets" {
+  name = "${var.name}-read-db-secret"
+  role = aws_iam_role.execution.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["secretsmanager:GetSecretValue"]
+      Resource = [var.db_secret_arn]
+    }]
+  })
+}
+
+resource "aws_iam_role" "task" {
+  name               = "${var.name}-ecs-task"
+  assume_role_policy = data.aws_iam_policy_document.assume.json
+}
+
+resource "aws_ecs_cluster" "this" {
+  name = "${var.name}-cluster"
+  setting {
+    name  = "containerInsights"
+    value = "enabled"
+  }
+}
+
+resource "aws_ecs_task_definition" "this" {
+  family                   = var.name
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu                      = var.task_cpu
+  memory                   = var.task_memory
+  execution_role_arn       = aws_iam_role.execution.arn
+  task_role_arn            = aws_iam_role.task.arn
+
+  container_definitions = jsonencode([
+    {
+      name      = var.name
+      image     = var.container_image
+      essential = true
+      portMappings = [{
+        containerPort = var.container_port
+        protocol      = "tcp"
+      }]
+      environment = [
+        { name = "PORT", value = tostring(var.container_port) },
+        { name = "NODE_ENV", value = "production" }
+      ]
+      # pulled from secrets manager at container start, never plaintext here
+      secrets = [
+        { name = "DB_HOST", valueFrom = "${var.db_secret_arn}:host::" },
+        { name = "DB_PORT", valueFrom = "${var.db_secret_arn}:port::" },
+        { name = "DB_USER", valueFrom = "${var.db_secret_arn}:username::" },
+        { name = "DB_PASSWORD", valueFrom = "${var.db_secret_arn}:password::" },
+        { name = "DB_NAME", valueFrom = "${var.db_secret_arn}:dbname::" }
+      ]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.app.name
+          "awslogs-region"        = data.aws_region.current.name
+          "awslogs-stream-prefix" = "app"
+        }
+      }
+    }
+  ])
+}
+
+resource "aws_ecs_service" "this" {
+  name            = "${var.name}-svc"
+  cluster         = aws_ecs_cluster.this.id
+  task_definition = aws_ecs_task_definition.this.arn
+  desired_count   = var.desired_count
+  launch_type     = "FARGATE"
+
+  network_configuration {
+    subnets          = var.private_app_subnet_ids
+    security_groups  = [var.app_security_group_id]
+    assign_public_ip = false
+  }
+
+  load_balancer {
+    target_group_arn = var.target_group_arn
+    container_name   = var.name
+    container_port   = var.container_port
+  }
+
+  # pipeline manages the running task def, so terraform shouldn't revert it
+  lifecycle {
+    ignore_changes = [task_definition, desired_count]
+  }
+
+  depends_on = [var.alb_listener_arn]
+}
+
+resource "aws_appautoscaling_target" "ecs" {
+  max_capacity       = var.max_count
+  min_capacity       = var.desired_count
+  resource_id        = "service/${aws_ecs_cluster.this.name}/${aws_ecs_service.this.name}"
+  scalable_dimension = "ecs:service:DesiredCount"
+  service_namespace  = "ecs"
+}
+
+resource "aws_appautoscaling_policy" "cpu" {
+  name               = "${var.name}-cpu-scaling"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.ecs.resource_id
+  scalable_dimension = aws_appautoscaling_target.ecs.scalable_dimension
+  service_namespace  = aws_appautoscaling_target.ecs.service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageCPUUtilization"
+    }
+    target_value = 65
+  }
+}

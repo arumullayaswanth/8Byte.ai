@@ -1,0 +1,4 @@
+# copy to terraform.tfvars for local runs (pipeline passes these itself)
+region          = "ap-south-1"
+container_image = "<account-id>.dkr.ecr.ap-south-1.amazonaws.com/staging:bootstrap"
+alert_email     = "you@example.com"
