@@ -96,6 +96,20 @@ jobs:
       - name: Terraform init
         run: terraform init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="dynamodb_table=${TF_LOCK_TABLE}"
 
+      # drop old rotation-lambda resources from state if a previous run left them.
+      # harmless no-ops when they aren't present.
+      - name: Clean stale rotation state
+        run: |
+          for addr in \
+            'module.stack.module.rds.aws_security_group.rotation' \
+            'module.stack.module.rds.aws_serverlessapplicationrepository_cloudformation_stack.rotation' \
+            'module.stack.module.rds.aws_secretsmanager_secret_rotation.db' \
+            'module.stack.module.rds.aws_secretsmanager_secret.db' \
+            'module.stack.module.rds.aws_secretsmanager_secret_version.db' \
+            'module.stack.module.rds.random_password.db'; do
+            terraform state rm "$addr" 2>/dev/null || true
+          done
+
       # a merged PR has no input, so default to apply. only destroy when asked.
       - name: Terraform ${{ github.event.inputs.action || 'apply' }} staging
         run: |
@@ -163,6 +177,18 @@ jobs:
 
       - name: Terraform init
         run: terraform init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="dynamodb_table=${TF_LOCK_TABLE}"
+
+      - name: Clean stale rotation state
+        run: |
+          for addr in \
+            'module.stack.module.rds.aws_security_group.rotation' \
+            'module.stack.module.rds.aws_serverlessapplicationrepository_cloudformation_stack.rotation' \
+            'module.stack.module.rds.aws_secretsmanager_secret_rotation.db' \
+            'module.stack.module.rds.aws_secretsmanager_secret.db' \
+            'module.stack.module.rds.aws_secretsmanager_secret_version.db' \
+            'module.stack.module.rds.random_password.db'; do
+            terraform state rm "$addr" 2>/dev/null || true
+          done
 
       - name: Terraform ${{ github.event.inputs.action || 'apply' }} production
         run: |
