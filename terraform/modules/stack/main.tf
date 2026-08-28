@@ -14,6 +14,7 @@ resource "aws_security_group" "app" {
   }
 
   egress {
+    description = "allow all outbound"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"

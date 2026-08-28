@@ -54,6 +54,7 @@ resource "aws_security_group" "db" {
   }
 
   egress {
+    description = "allow all outbound"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -106,6 +107,7 @@ resource "aws_security_group" "rotation" {
   vpc_id      = var.vpc_id
 
   egress {
+    description = "allow all outbound"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"

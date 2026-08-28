@@ -23,6 +23,7 @@ resource "aws_security_group" "alb" {
   }
 
   egress {
+    description = "allow all outbound"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
