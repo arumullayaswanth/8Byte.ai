@@ -165,18 +165,28 @@ jobs:
       - name: Analyze
         uses: github/codeql-action/analyze@v3
 
-  notify-failure:
+  notify:
     runs-on: ubuntu-latest
     needs:
       [pre-commit, lint-test, dependency-scan, image-scan, iac-scan, codeql]
-    # only notify on failure, and only if a webhook is actually configured
-    if: failure() && vars.SLACK_ENABLED == 'true'
+    # run on every finish (pass or fail), as long as a webhook is configured
+    if: always() && vars.SLACK_ENABLED == 'true'
     steps:
+      # roll the results of all needed jobs into a single pass/fail status
+      - name: Compute status
+        id: status
+        run: |
+          if [ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" = "true" ]; then
+            echo "text=CI FAILED in ${{ github.repository }} (run ${{ github.run_id }})" >> "$GITHUB_OUTPUT"
+          else
+            echo "text=CI PASSED in ${{ github.repository }} (run ${{ github.run_id }})" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: slackapi/slack-github-action@v2.0.0
         with:
           webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook
           payload: |
             {
-              "text": "CI failed in ${{ github.repository }} (run ${{ github.run_id }})"
+              "text": "${{ steps.status.outputs.text }}"
             }

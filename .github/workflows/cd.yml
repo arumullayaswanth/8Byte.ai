@@ -137,16 +137,25 @@ jobs:
           service: production-svc
           wait-for-service-stability: true
 
-  notify-failure:
+  notify:
     runs-on: ubuntu-latest
     needs: [build-and-push, deploy-staging, deploy-production]
-    if: failure() && vars.SLACK_ENABLED == 'true'
+    if: always() && vars.SLACK_ENABLED == 'true'
     steps:
+      - name: Compute status
+        id: status
+        run: |
+          if [ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" = "true" ]; then
+            echo "text=CD FAILED in ${{ github.repository }} for ${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "text=CD PASSED in ${{ github.repository }} for ${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: slackapi/slack-github-action@v2.0.0
         with:
           webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook
           payload: |
             {
-              "text": "CD failed in ${{ github.repository }} for ${{ github.sha }}"
+              "text": "${{ steps.status.outputs.text }}"
             }
