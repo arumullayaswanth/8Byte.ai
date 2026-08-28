@@ -1,3 +1,4 @@
 # terraform init -backend-config=backend.hcl
-# bucket is created manually before the first pipeline run
-bucket = "8byte-tfstate-yaswanth"
+# bucket and lock table are created manually before the first pipeline run
+bucket         = "8byte-tfstate-yaswanth"
+dynamodb_table = "terraform-state-lock"

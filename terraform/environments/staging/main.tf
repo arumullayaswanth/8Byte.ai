@@ -12,13 +12,12 @@ terraform {
     }
   }
 
-  # bucket is passed at init time (see backend.hcl). the bucket + lock table
-  # are created manually before the pipeline ever runs.
+  # bucket and lock table are passed at init time (see backend.hcl). both are
+  # created manually before the pipeline ever runs.
   backend "s3" {
-    key            = "staging/terraform.tfstate"
-    region         = "ap-south-1"
-    dynamodb_table = "terraform-state-lock"
-    encrypt        = true
+    key     = "staging/terraform.tfstate"
+    region  = "ap-south-1"
+    encrypt = true
   }
 }
 

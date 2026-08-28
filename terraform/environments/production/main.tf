@@ -13,10 +13,9 @@ terraform {
   }
 
   backend "s3" {
-    key            = "production/terraform.tfstate"
-    region         = "ap-south-1"
-    dynamodb_table = "terraform-state-lock"
-    encrypt        = true
+    key     = "production/terraform.tfstate"
+    region  = "ap-south-1"
+    encrypt = true
   }
 }
 
