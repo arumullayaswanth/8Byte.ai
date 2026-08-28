@@ -12,6 +12,19 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  pre-commit:
+    name: Pre-commit hooks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.11.4
+      - uses: pre-commit/action@v3.0.1
+
   lint-test:
     name: Lint & Test
     runs-on: ubuntu-latest
@@ -91,14 +104,19 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # install trivy from its official apt repo and run the CLI directly.
+      # avoids depending on the trivy-action tag (which had a supply-chain
+      # advisory) and is easy to read.
+      - name: Install Trivy
+        run: |
+          sudo apt-get install -y wget gnupg
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg
+          echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" | sudo tee /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update
+          sudo apt-get install -y trivy
+
       - name: Trivy image scan
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: app-scan:${{ github.sha }}
-          format: table
-          exit-code: "1"
-          ignore-unfixed: true
-          severity: HIGH,CRITICAL
+        run: trivy image --exit-code 1 --ignore-unfixed --severity HIGH,CRITICAL app-scan:${{ github.sha }}
 
   iac-scan:
     name: IaC Scan (tfsec + Trivy)
@@ -111,13 +129,16 @@ jobs:
         with:
           working_directory: terraform
 
-      - name: Trivy filesystem/config scan
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          scan-type: config
-          scan-ref: terraform
-          format: table
-          severity: HIGH,CRITICAL
+      - name: Install Trivy
+        run: |
+          sudo apt-get install -y wget gnupg
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg
+          echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" | sudo tee /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update
+          sudo apt-get install -y trivy
+
+      - name: Trivy config scan
+        run: trivy config --severity HIGH,CRITICAL terraform
 
   codeql:
     name: CodeQL
@@ -139,7 +160,8 @@ jobs:
 
   notify-failure:
     runs-on: ubuntu-latest
-    needs: [lint-test, dependency-scan, image-scan, iac-scan, codeql]
+    needs:
+      [pre-commit, lint-test, dependency-scan, image-scan, iac-scan, codeql]
     # only notify on failure, and only if a webhook is actually configured
     if: failure() && vars.SLACK_ENABLED == 'true'
     steps:
