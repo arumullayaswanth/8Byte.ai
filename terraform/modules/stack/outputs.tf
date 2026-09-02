@@ -34,6 +34,10 @@ output "sns_topic_arn" {
   value = module.monitoring.sns_topic_arn
 }
 
+output "resource_group_name" {
+  value = aws_resourcegroups_group.this.name
+}
+
 output "log_group_name" {
   value = module.ecs.log_group_name
 }

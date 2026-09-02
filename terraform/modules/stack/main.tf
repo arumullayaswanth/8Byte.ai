@@ -1,3 +1,21 @@
+# groups every resource of this environment (by its Environment tag) into one
+# AWS Resource Group, so staging and production each show up as a single group.
+resource "aws_resourcegroups_group" "this" {
+  name = "${var.name}-resources"
+
+  resource_query {
+    query = jsonencode({
+      ResourceTypeFilters = ["AWS::AllSupported"]
+      TagFilters = [{
+        Key    = "Environment"
+        Values = [var.name]
+      }]
+    })
+  }
+
+  tags = { Name = "${var.name}-resources" }
+}
+
 # app SG lives here (not in the ecs module) so rds can reference it and we
 # avoid an ecs <-> rds dependency cycle
 resource "aws_security_group" "app" {
